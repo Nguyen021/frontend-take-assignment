@@ -1,8 +1,10 @@
-import type { SVGProps } from 'react'
+import { useState, type SVGProps } from 'react'
 
 import * as Checkbox from '@radix-ui/react-checkbox'
 
 import { api } from '@/utils/client/api'
+
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 /**
  * QUESTION 3:
@@ -63,19 +65,60 @@ import { api } from '@/utils/client/api'
  *  - https://auto-animate.formkit.com
  */
 
-export const TodoList = () => {
+interface TodoListProps {
+  status: string;
+}
+export const TodoList: React.FC<TodoListProps> = ({ status }) => {
+
+  const apiContext = api.useContext()
+
+  const [parent, enableAnimations] = useAutoAnimate(/* optional config */)
+
+
+  // const { data: todos = [] } = api.todo.getAll.useQuery({
+  //   statuses: ['completed', 'pending'],
+  // })
+
   const { data: todos = [] } = api.todo.getAll.useQuery({
-    statuses: ['completed', 'pending'],
-  })
+    statuses: status === 'all' ? ['completed', 'pending'] : [status as 'completed' | 'pending'],
+  });
+
+  const { mutate: updateTodoStatus, isLoading: isUpdating } = api.todoStatus.update.useMutation({
+    onSuccess: () => {
+      apiContext.todo.getAll.refetch();
+    },
+  });
+
+  const { mutate: deleteTodo, isLoading: isDeleting } = api.todo.delete.useMutation({
+    onSuccess: () => {
+      apiContext.todo.getAll.refetch();
+    },
+  });
+
+  const handleCheckboxChange = (todoId : number, checked : boolean) => {
+    const newStatus = checked ? 'completed' : 'pending';
+    updateTodoStatus({ todoId : Number(todoId), status: newStatus });
+  };
+
+  const handleDeleteClick = (todoId: number) => {
+    console.log(todoId)
+    deleteTodo({ id: todoId });
+  };
 
   return (
-    <ul className="grid grid-cols-1 gap-y-3">
+    
+    <ul ref={parent} className="grid grid-cols-1 gap-y-3">
       {todos.map((todo) => (
         <li key={todo.id}>
-          <div className="flex items-center rounded-12 border border-gray-200 px-4 py-3 shadow-sm">
+          <div className={`flex items-center rounded-12 border border-gray-200 px-4 py-3 shadow-sm ${
+              todo.status === 'completed' ? 'bg-[#F8FAFC] line-through' : 'bg-white'
+            }` }>
             <Checkbox.Root
               id={String(todo.id)}
               className="flex h-6 w-6 items-center justify-center rounded-6 border border-gray-300 focus:border-gray-700 focus:outline-none data-[state=checked]:border-gray-700 data-[state=checked]:bg-gray-700"
+              onCheckedChange={(checked:boolean) => handleCheckboxChange(todo.id, checked === true)}
+              checked={todo.status === 'completed'}
+
             >
               <Checkbox.Indicator>
                 <CheckIcon className="h-4 w-4 text-white" />
@@ -85,6 +128,13 @@ export const TodoList = () => {
             <label className="block pl-3 font-medium" htmlFor={String(todo.id)}>
               {todo.body}
             </label>
+            <button
+               onClick={() => handleDeleteClick(todo.id)}
+              className="ml-auto p-1 text-gray-700 hover:text-gray-950"
+              aria-label="Delete todo"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
           </div>
         </li>
       ))}
